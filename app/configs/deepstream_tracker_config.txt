@@ -27,7 +27,10 @@ tracker-width=640
 tracker-height=320
 gpu-id=0
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
-ll-config-file=tracker_config.yml
-enable-past-frame=1
-enable-batch-process=1
+ll-config-file=./configs/tracker_config.yml
+# enable-past-frame=1
+# enable-batch-process=1
 display-tracking-id=0
+# Increase the user-meta-pool-size to avoid "Unable to acquire a user meta buffer" errors
+# Tune this value based on number of tracked objects / pipeline load
+user-meta-pool-size=1024

@@ -55,7 +55,8 @@
 [property]
 gpu-id=0
 net-scale-factor=1
-model-engine-file=../models/facenet.engine
+# model-engine-file=../models/facenet.engine
+model-engine-file=../models/facenet.onnx_b1_gpu0_fp32.engine
 onnx-file=../models/facenet.onnx
 # 0=FP32 and 1=INT8 mode
 network-mode=0
@@ -67,3 +68,4 @@ operate-on-class-ids=2
 network-type=1
 output-tensor-meta=1
 secondary-reinfer-interval=30
+output-blob-names=Bottleneck_BatchNorm

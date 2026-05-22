@@ -55,12 +55,13 @@
 [property]
 gpu-id=0
 net-scale-factor=0.0039215697906911373
-tlt-model-key=tlt_encode
-tlt-encoded-model=../models/resnet34_peoplenet_pruned.etlt
-model-engine-file=../models/resnet34_peoplenet_pruned.etlt_b1_gpu0_fp32.engine
+# tlt-model-key=tlt_encode
+# tlt-encoded-model=../models/resnet34_peoplenet_pruned.etlt
+# model-engine-file=../models/resnet34_peoplenet_pruned.etlt_b1_gpu0_fp32.engine
+model-engine-file=../models/resnet34_peoplenet.engine
 labelfile-path=../models/labels.txt
 infer-dims=3;544;960
-uff-input-blob-name=input_1
+# uff-input-blob-name=input_1
 batch-size=1
 process-mode=1
 model-color-format=0
@@ -70,7 +71,7 @@ num-detected-classes=3
 cluster-mode=2
 interval=0
 gie-unique-id=1
-output-blob-names=output_bbox/BiasAdd;output_cov/Sigmoid
+output-blob-names=output_cov/Sigmoid:0;output_bbox/BiasAdd:0
 
 [class-attrs-all]
 topk=20
@@ -79,11 +80,11 @@ pre-cluster-threshold=0.2
 
 # Per class configuration
 # Person
-[class-attrs-0] 
+[class-attrs-0]
 pre-cluster-threshold=0.2
 
 # Bag
-[class-attrs-1] 
+[class-attrs-1]
 pre-cluster-threshold=1.2
 
 # Face
