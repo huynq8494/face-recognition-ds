@@ -1,4 +1,57 @@
-# deepstream-face-recognition
+# face-recognition-ds
+Sample face recognition app using NVIDIA DeepStream
+
+## Environment
+- Ubuntu 24.04.4 LTS (WSL2)
+- Docker version 29.5.0, build 98f1464
+- Docker image: nvcr.io/nvidia/deepstream:7.1-triton-multiarch
+
+- Resolve warning when run apps inside docker container
+    ```bash
+    apt-key export FB0B24895113F120 | gpg --dearmor | tee /etc/apt/trusted.gpg.d/librealsense.gpg > /dev/null
+    apt-get update
+    apt-get install -y sudo libmp3lame0 libavcodec58 libmpg123-0 libflac8 mjpegtools
+    ```
+<details>
+    <summary>Tips</summary>
+
+    - Mount your workspace while start the docker container
+
+    ```bash
+    cd $HOME    # The next command will mount $HOME into the docker container
+    docker run -it --privileged --net=host --gpus all -e DISPLAY=$DISPLAY -e CUDA_CACHE_DISABLE=0 \
+        --name=deepstream7 -v $PWD:$PWD -v /tmp/.X11-unix/:/tmp/.X11-unix --device /dev/snd \
+        nvcr.io/nvidia/deepstream:7.1-triton-multiarch
+    ```
+    - Switch to triton-server account to keep file permission. triton-server has uid and gid are 1000, they are the same with my huynq account on host Ubuntu 24.04.4 LTS (WSL2)
+    ```bash
+    usermod -aG sudo triton-server
+    passwd triton-server
+    su triton-server
+    ```
+    - After exit the container, we can restart and interact with it
+    ```bash
+    docker start deepstream7
+    docker exec -it -u 1000:1000 deepstream7 bash
+    export HOME=/home/huynq # You need to edit this
+    ```
+</details>
+
+## Preparation
+### Model preparation
+- Download facenet weight from: https://github.com/nyoki-mtl/keras-facenet/tree/2a571cfa9033f32543ade2394d3d267e55c2926b (Check "Download model from here and save it in model/keras/"). Make sure the weight located at `models/facenet_keras_weights.h5`
+- Prepare facenet.onnx inside uv env
+    ```bash
+    python3 -m pip install --upgrade pip setuptools
+    sudo apt-get install python3.10-venv
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python -m pip install --upgrade pip setuptools
+    pip install numpy==1.26.0 tensorflow==2.10.1 opencv-python-headless==4.9.0.80 tf2onnx==1.16.1
+    ```
+
+
+# Below are out of date info from the original repository: https://github.com/Kojk-AI/deepstream-face-recognition
 
 <div id="top"></div>
 
@@ -41,7 +94,7 @@ There are 2 different ways to run the sample app:
 
 ### Running the sample app in a Docker container
 
-The pre-built Docker container can be pulled 
+The pre-built Docker container can be pulled
 
 ```
 docker pull kojkai/deepstream-jetson-nano:facenet
@@ -57,8 +110,8 @@ sudo docker run --runtime nvidia -it --rm --network host \
     kojkai/deepstream-jetson-nano:facenet
 ```
 
-  While it can be ran out of the box, the faces that are stored in the docker container are mine. 
-  To adopt the docker image to your own use, you will need to first create a "database" of facial features using the notebook modify_keras_FaceNet.ipynb. The "database" will be in the form of a .npz file. 
+  While it can be ran out of the box, the faces that are stored in the docker container are mine.
+  To adopt the docker image to your own use, you will need to first create a "database" of facial features using the notebook modify_keras_FaceNet.ipynb. The "database" will be in the form of a .npz file.
   You will also need a list of "names" (real names or id), which corresponds to the saved facial features. Each line in the file will correspond to a single name.
   Replace both the files; embeddings.npz and names.txt, in /app/models with your own files
 

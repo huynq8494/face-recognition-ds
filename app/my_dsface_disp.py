@@ -160,7 +160,6 @@ def set_property_safe(element, prop, value):
     except Exception as e:
         sys.stderr.write(f"Skipping unsupported property '{prop}' on {element.get_name()}: {e}\n")
 
-
 def main(input_path):
     Gst.init(None)
 
@@ -172,20 +171,36 @@ def main(input_path):
 
     source = Gst.ElementFactory.make('uridecodebin', 'uri-source')
     nvvidconvsrc = Gst.ElementFactory.make('nvvidconv', 'convertor_src')
+    if not nvvidconvsrc:
+        print("nvvideoconvert: I guess you are running on x86_64 platform :)))")
+        nvvidconvsrc = Gst.ElementFactory.make('nvvideoconvert', 'convertor_src')
     caps_vidconvsrc = Gst.ElementFactory.make('capsfilter', 'nvmm_caps')
     streammux = Gst.ElementFactory.make('nvstreammux', 'Stream-muxer')
     pgie = Gst.ElementFactory.make('nvinfer', 'primary-inference')
     tracker = Gst.ElementFactory.make('nvtracker', 'tracker')
     sgie1 = Gst.ElementFactory.make('nvinfer', 'secondary1-nvinference-engine')
     nvvidconv = Gst.ElementFactory.make('nvvidconv', 'convertor')
+    if not nvvidconv:
+        print("nvvideoconvert: I guess you are running on x86_64 platform :)))")
+        nvvidconv = Gst.ElementFactory.make('nvvideoconvert', 'convertor')
     nvosd = Gst.ElementFactory.make('nvdsosd', 'onscreendisplay')
     nvvidconv_postosd = Gst.ElementFactory.make('nvvideoconvert', 'convertor_postosd')
     caps = Gst.ElementFactory.make('capsfilter', 'caps')
     transform = Gst.ElementFactory.make('nvegltransform', 'nvegl-transform')
+    if not transform:
+        print("nvegltransform: I guess you are running on x86_64 platform :)))")
+        transform = None
     sink = Gst.ElementFactory.make('nveglglessink', 'nvvideo-renderer')
+    if not sink:
+        print("nveglglessink: I guess you are running on x86_64 platform :)))")
+        sink = Gst.ElementFactory.make('fakesink', 'nvvideo-renderer')
 
-    required = [source, nvvidconvsrc, caps_vidconvsrc, streammux, pgie, tracker, sgie1,
-                nvvidconv, nvosd, nvvidconv_postosd, caps, transform, sink]
+    if transform:
+        required = [source, nvvidconvsrc, caps_vidconvsrc, streammux, pgie, tracker, sgie1,
+                    nvvidconv, nvosd, nvvidconv_postosd, caps, transform, sink]
+    else:
+        required = [source, nvvidconvsrc, caps_vidconvsrc, streammux, pgie, tracker, sgie1,
+                    nvvidconv, nvosd, nvvidconv_postosd, caps, sink]
     for element in required:
         if not element:
             sys.stderr.write(f'Unable to create {element.get_name() if element else "element"}\n')
@@ -246,7 +261,8 @@ def main(input_path):
     pipeline.add(nvosd)
     pipeline.add(nvvidconv_postosd)
     pipeline.add(caps)
-    pipeline.add(transform)
+    if transform:
+        pipeline.add(transform)
     pipeline.add(sink)
 
     nvvidconvsrc.link(caps_vidconvsrc)
@@ -268,8 +284,11 @@ def main(input_path):
     nvvidconv.link(nvosd)
     nvosd.link(nvvidconv_postosd)
     nvvidconv_postosd.link(caps)
-    caps.link(transform)
-    transform.link(sink)
+    if transform:
+        caps.link(transform)
+        transform.link(sink)
+    else:
+        caps.link(sink)
 
     osdsinkpad = nvosd.get_static_pad('sink')
     if not osdsinkpad:
