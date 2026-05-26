@@ -10,6 +10,7 @@ import configparser
 import ctypes
 import os
 import sys
+import time
 
 import gi
 import numpy as np
@@ -25,6 +26,12 @@ import pyds
 emb_array = []
 names = []
 id_name_dic = {}
+frame_count = 0
+start_time = time.time()
+fps = 0.0
+total_frame_count = 0
+pipeline_start_time = time.time()
+avg_fps = 0.0
 
 
 def load_face_embeddings(embeddings_path, names_path):
@@ -60,6 +67,24 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
             frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
         except StopIteration:
             break
+
+        # --- FPS calculation (frame-level) ---
+        global frame_count, start_time, fps, total_frame_count, pipeline_start_time, avg_fps
+        total_frame_count += 1
+        if total_frame_count == 100:
+            start_time = time.time()
+            pipeline_start_time = time.time()
+        elif total_frame_count > 100:
+            frame_count += 1
+            now = time.time()
+            elapsed = now - start_time
+            if elapsed >= 1.0:
+                fps = frame_count / elapsed
+                frame_count = 0
+                start_time = now
+            total_elapsed = now - pipeline_start_time
+            if total_elapsed > 0:
+                avg_fps = (total_frame_count - 100) / total_elapsed
 
         l_obj = frame_meta.obj_meta_list
         while l_obj is not None:
@@ -97,6 +122,28 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
             l_frame = l_frame.next
         except StopIteration:
             break
+
+        # Add FPS display on the frame using display meta
+        try:
+            display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
+            display_meta.num_labels = 1
+            text_params = display_meta.text_params
+            text_params[0].display_text = f"FPS: {fps:.2f}  Avg FPS: {avg_fps:.2f}"
+            text_params[0].x_offset = 10
+            text_params[0].y_offset = 12
+            text_params[0].font_params.font_name = "Serif"
+            text_params[0].font_params.font_size = 12
+            # set white font color if available
+            try:
+                text_params[0].font_params.font_color.red = 1.0
+                text_params[0].font_params.font_color.green = 1.0
+                text_params[0].font_params.font_color.blue = 1.0
+                text_params[0].font_params.font_color.alpha = 1.0
+            except Exception:
+                pass
+            pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
+        except Exception:
+            pass
 
     return Gst.PadProbeReturn.OK
 
@@ -136,12 +183,18 @@ def main(input_path, output_path):
 
     source = Gst.ElementFactory.make('uridecodebin', 'uri-source')
     nvvidconvsrc = Gst.ElementFactory.make('nvvidconv', 'convertor_src')
+    if not nvvidconvsrc:
+        print("nvvideoconvert: I guess you are running on x86_64 platform :)))")
+        nvvidconvsrc = Gst.ElementFactory.make('nvvideoconvert', 'convertor_src')
     caps_vidconvsrc = Gst.ElementFactory.make('capsfilter', 'nvmm_caps')
     streammux = Gst.ElementFactory.make('nvstreammux', 'Stream-muxer')
     pgie = Gst.ElementFactory.make('nvinfer', 'primary-inference')
     tracker = Gst.ElementFactory.make('nvtracker', 'tracker')
     sgie1 = Gst.ElementFactory.make('nvinfer', 'secondary1-nvinference-engine')
     nvvidconv = Gst.ElementFactory.make('nvvidconv', 'convertor')
+    if not nvvidconv:
+        print("nvvideoconvert: I guess you are running on x86_64 platform :)))")
+        nvvidconv = Gst.ElementFactory.make('nvvideoconvert', 'convertor')
     nvosd = Gst.ElementFactory.make('nvdsosd', 'onscreendisplay')
     nvvidconv_postosd = Gst.ElementFactory.make('nvvidconv', 'convertor_postosd')
     caps = Gst.ElementFactory.make('capsfilter', 'caps')
@@ -192,6 +245,8 @@ def main(input_path, output_path):
             set_property_safe(tracker, 'enable-batch-process', config.getint('tracker', key))
         elif key == 'enable-past-frame':
             set_property_safe(tracker, 'enable-past-frame', config.getint('tracker', key))
+        elif key == 'user-meta-pool-size':
+            set_property_safe(tracker, 'user-meta-pool-size', config.getint('tracker', key))
         elif key == 'display-tracking-id':
             set_property_safe(tracker, 'display-tracking-id', config.getint('tracker', key))
 
@@ -270,12 +325,22 @@ def main(input_path, output_path):
     bus.add_signal_watch()
     bus.connect('message', bus_call, loop)
 
+    # Reset FPS counters just before playback starts
+    global frame_count, start_time, fps, total_frame_count, pipeline_start_time, avg_fps
+    frame_count = 0
+    total_frame_count = 0
+    fps = 0.0
+    avg_fps = 0.0
+    start_time = time.time()
+    pipeline_start_time = time.time()
+
     pipeline.set_state(Gst.State.PLAYING)
     try:
         loop.run()
     except KeyboardInterrupt:
         pass
     pipeline.set_state(Gst.State.NULL)
+    print(f"Average FPS: {avg_fps:.2f} (over {total_frame_count} frames)")
     return 0
 
 

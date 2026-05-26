@@ -29,6 +29,9 @@ id_name_dic = {}
 frame_count = 0
 start_time = time.time()
 fps = 0.0
+total_frame_count = 0
+pipeline_start_time = time.time()
+avg_fps = 0.0
 
 
 def load_face_embeddings(embeddings_path, names_path):
@@ -66,14 +69,22 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
             break
 
         # --- FPS calculation (frame-level) ---
-        global frame_count, start_time, fps
-        frame_count += 1
-        now = time.time()
-        elapsed = now - start_time
-        if elapsed >= 1.0:
-            fps = frame_count / elapsed
-            frame_count = 0
-            start_time = now
+        global frame_count, start_time, fps, total_frame_count, pipeline_start_time, avg_fps
+        total_frame_count += 1
+        if total_frame_count == 100:
+            start_time = time.time()
+            pipeline_start_time = time.time()
+        elif total_frame_count > 100:
+            frame_count += 1
+            now = time.time()
+            elapsed = now - start_time
+            if elapsed >= 1.0:
+                fps = frame_count / elapsed
+                frame_count = 0
+                start_time = now
+            total_elapsed = now - pipeline_start_time
+            if total_elapsed > 0:
+                avg_fps = (total_frame_count - 100) / total_elapsed
 
         l_obj = frame_meta.obj_meta_list
         while l_obj is not None:
@@ -117,7 +128,7 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
             display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
             display_meta.num_labels = 1
             text_params = display_meta.text_params
-            text_params[0].display_text = f"FPS: {fps:.2f}"
+            text_params[0].display_text = f"FPS: {fps:.2f}  Avg FPS: {avg_fps:.2f}"
             text_params[0].x_offset = 10
             text_params[0].y_offset = 12
             text_params[0].font_params.font_name = "Serif"
@@ -301,12 +312,22 @@ def main(input_path):
     bus.add_signal_watch()
     bus.connect('message', bus_call, loop)
 
+    # Reset FPS counters just before playback starts
+    global frame_count, start_time, fps, total_frame_count, pipeline_start_time, avg_fps
+    frame_count = 0
+    total_frame_count = 0
+    fps = 0.0
+    avg_fps = 0.0
+    start_time = time.time()
+    pipeline_start_time = time.time()
+
     pipeline.set_state(Gst.State.PLAYING)
     try:
         loop.run()
     except KeyboardInterrupt:
         pass
     pipeline.set_state(Gst.State.NULL)
+    print(f"Average FPS: {avg_fps:.2f} (over {total_frame_count} frames)")
     return 0
 
 
